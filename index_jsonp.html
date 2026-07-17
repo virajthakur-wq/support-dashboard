@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Support Performance Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;color:#152033}header{padding:20px 28px;background:linear-gradient(135deg,#111827,#1e40af);color:white}h1{margin:0;font-size:24px}header p{margin:6px 0 0;color:#dbeafe}.toolbar{display:grid;grid-template-columns:repeat(6,minmax(140px,1fr));gap:12px;padding:16px 28px;background:white;border-bottom:1px solid #dde5ef;position:sticky;top:0;z-index:10}select,input{width:100%;padding:10px;border:1px solid #dde5ef;border-radius:10px;background:white}main{padding:24px 28px}.kpis{display:grid;grid-template-columns:repeat(8,1fr);gap:14px;margin-bottom:20px}.card{background:white;border:1px solid #dde5ef;border-radius:16px;box-shadow:0 6px 18px rgba(15,23,42,.06)}.kpi{padding:16px}.label{color:#65758b;font-size:12px;text-transform:uppercase;letter-spacing:.05em}.value{font-size:26px;font-weight:800;margin-top:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.wide{grid-column:1/-1}.chart{height:390px;padding:8px}.section-title{padding:14px 16px;border-bottom:1px solid #dde5ef;font-weight:800}.tablewrap{max-height:480px;overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid #dde5ef;text-align:left;white-space:nowrap}th{position:sticky;top:0;background:#f8fafc;z-index:1}.status{padding:10px 28px;color:#65758b;font-size:13px}.error{color:#dc2626;font-weight:700}@media(max-width:1200px){.kpis{grid-template-columns:repeat(4,1fr)}.toolbar{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:1fr}}@media(max-width:700px){.kpis{grid-template-columns:repeat(2,1fr)}.toolbar{grid-template-columns:1fr}main{padding:14px}}
+</style>
+</head>
+<body>
+<header><h1>Support Performance Dashboard</h1><p>Live dashboard powered by Google Sheets. Update Master_Data weekly and refresh this page.</p></header>
+<div class="toolbar"><select id="week"><option value="">All Weeks</option></select><select id="tech"><option value="">All Tech</option></select><select id="lead"><option value="">All Leads</option></select><select id="location"><option value="">All Locations</option></select><select id="agentType"><option value="">All Agent Types</option></select><input id="agentSearch" placeholder="Search agent..."></div>
+<div class="status" id="status">Loading Google Sheet data...</div>
+<main><section class="kpis" id="kpis"></section><section class="grid">
+<div class="card wide"><div class="section-title">Weekly Performance Trends</div><div id="trend" class="chart"></div></div>
+<div class="card"><div class="section-title">CSAT by Tech</div><div id="techChart" class="chart"></div></div>
+<div class="card"><div class="section-title">Lead Performance</div><div id="leadChart" class="chart"></div></div>
+<div class="card"><div class="section-title">Performance Quadrant: AHT vs CSAT</div><div id="quadrant" class="chart"></div></div>
+<div class="card"><div class="section-title">Location Comparison</div><div id="locationChart" class="chart"></div></div>
+<div class="card"><div class="section-title">Top Agents by CSAT</div><div id="topAgents" class="chart"></div></div>
+<div class="card"><div class="section-title">Operational Metrics by Week</div><div id="opsChart" class="chart"></div></div>
+<div class="card wide"><div class="section-title">Filtered Data</div><div class="tablewrap"><table id="dataTable"></table></div></div>
+</section></main>
+<script>
+const API_URL="https://script.google.com/a/macros/ui.com/s/AKfycbzlbmzmpG3VLhJrjBJKpxo1mykVIrJ8cCQUlLc3P0WrZDVtz8z7Gm_teB7_97VjvFO7PA/exec";let rawData=[];
+function parseCSV(text){const rows=[];let row=[],field="",quote=false;for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];if(c=='"'&&quote&&n=='"'){field+='"';i++}else if(c=='"'){quote=!quote}else if(c==','&&!quote){row.push(field);field=""}else if((c=='\n'||c=='\r')&&!quote){if(field!==""||row.length){row.push(field);rows.push(row);row=[];field=""}if(c=='\r'&&n=='\n')i++}else field+=c}if(field!==""||row.length){row.push(field);rows.push(row)}const headers=rows.shift().map(h=>h.trim());return rows.filter(r=>r.some(x=>String(x).trim()!="")).map(r=>{const o={};headers.forEach((h,i)=>o[h]=(r[i]||"").trim());return o})}
+function num(v){if(v==null||v==="")return null;const n=parseFloat(String(v).replace(/,/g,"").replace("%",""));return Number.isFinite(n)?n:null}
+function clean(d){return d.map(r=>({Week:r["Week"]||"",Alias:r["Alias"]||"",Tech:r["Tech"]||"",Location:r["Location"]||"",Lead:r["Lead"]||"",AgentType:r["Agent Type"]||"",CSAT:num(r["CSAT %"]),Surveys:num(r["Surveys"]),AHT:num(r["AHT (m)"]),FRT:num(r["FRT (s)"]),ART:num(r["ART (s)"]),OnlineHours:num(r["Avg Online Hours"]),OnlineDays:num(r["Online Days"]),Acceptance:num(r["Acceptance Rate"])})).filter(r=>r.Week||r.Alias)}
+function avg(a,k){const x=a.map(r=>r[k]).filter(v=>v!==null);return x.length?x.reduce((p,c)=>p+c,0)/x.length:null}function sum(a,k){return a.map(r=>r[k]).filter(v=>v!==null).reduce((p,c)=>p+c,0)}function group(a,k){const m={};a.forEach(r=>{const key=r[k]||"Unassigned";(m[key]=m[key]||[]).push(r)});return m}
+function fillFilter(id,key){const el=document.getElementById(id),old=el.value;const vals=[...new Set(rawData.map(r=>r[key]).filter(Boolean))].sort();const labels={week:"Weeks",tech:"Tech",lead:"Leads",location:"Locations",agentType:"Agent Types"};el.innerHTML='<option value="">All '+labels[id]+'</option>';vals.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;el.appendChild(o)});if(vals.includes(old))el.value=old}
+function filtered(){return rawData.filter(r=>(!week.value||r.Week===week.value)&&(!tech.value||r.Tech===tech.value)&&(!lead.value||r.Lead===lead.value)&&(!location.value||r.Location===location.value)&&(!agentType.value||r.AgentType===agentType.value)&&(!agentSearch.value||r.Alias.toLowerCase().includes(agentSearch.value.toLowerCase())))}
+function fmt(v,s){if(v===null||Number.isNaN(v))return"—";if(s=="%")return v.toFixed(1)+"%";if(s=="")return Math.round(v).toLocaleString();return v.toFixed(1)+s}function kpiCard(l,v){return `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div></div>`}
+const layout={margin:{l:45,r:25,t:20,b:60},paper_bgcolor:"white",plot_bgcolor:"white",font:{family:"Inter, Segoe UI, Arial"},legend:{orientation:"h"}};
+function renderKPIs(d){kpis.innerHTML=[kpiCard("Avg CSAT",fmt(avg(d,"CSAT"),"%")),kpiCard("Total Surveys",fmt(sum(d,"Surveys"),"")),kpiCard("Avg AHT",fmt(avg(d,"AHT"),"m")),kpiCard("Avg FRT",fmt(avg(d,"FRT"),"s")),kpiCard("Avg ART",fmt(avg(d,"ART"),"s")),kpiCard("Acceptance",fmt(avg(d,"Acceptance"),"%")),kpiCard("Online Hours",fmt(avg(d,"OnlineHours"),"h")),kpiCard("Active Agents",new Set(d.map(r=>r.Alias).filter(Boolean)).size)].join("")}
+function renderCharts(d){const byWeek=group(d,"Week"),weeks=Object.keys(byWeek).sort();Plotly.react("trend",[{x:weeks,y:weeks.map(w=>avg(byWeek[w],"CSAT")),name:"CSAT %",type:"scatter",mode:"lines+markers"},{x:weeks,y:weeks.map(w=>avg(byWeek[w],"AHT")),name:"AHT (m)",type:"scatter",mode:"lines+markers"},{x:weeks,y:weeks.map(w=>avg(byWeek[w],"FRT")),name:"FRT (s)",type:"scatter",mode:"lines+markers"},{x:weeks,y:weeks.map(w=>avg(byWeek[w],"ART")),name:"ART (s)",type:"scatter",mode:"lines+markers"}],layout,{responsive:true});
+const byTech=group(d,"Tech"),techs=Object.keys(byTech).sort();Plotly.react("techChart",[{x:techs,y:techs.map(k=>avg(byTech[k],"CSAT")),type:"bar"}],{...layout,yaxis:{title:"CSAT %"}},{responsive:true});
+const byLead=group(d,"Lead"),leads=Object.keys(byLead).sort((a,b)=>avg(byLead[a],"CSAT")-avg(byLead[b],"CSAT"));Plotly.react("leadChart",[{x:leads.map(k=>avg(byLead[k],"CSAT")),y:leads,type:"bar",orientation:"h"}],{...layout,xaxis:{title:"CSAT %"}},{responsive:true});
+Plotly.react("quadrant",[{x:d.map(r=>r.AHT),y:d.map(r=>r.CSAT),text:d.map(r=>`${r.Alias}<br>${r.Tech}<br>Surveys: ${r.Surveys??"—"}`),mode:"markers",type:"scatter",marker:{size:d.map(r=>Math.max(8,Math.min(38,(r.Surveys||1)/2))),sizemode:"diameter"}}],{...layout,xaxis:{title:"AHT (m)"},yaxis:{title:"CSAT %"}},{responsive:true});
+const byLoc=group(d,"Location"),locs=Object.keys(byLoc).sort();Plotly.react("locationChart",[{x:locs,y:locs.map(k=>avg(byLoc[k],"CSAT")),type:"bar",name:"CSAT %"},{x:locs,y:locs.map(k=>avg(byLoc[k],"Acceptance")),type:"bar",name:"Acceptance %"}],layout,{responsive:true});
+const byAgent=group(d,"Alias");const agents=Object.keys(byAgent).map(a=>({a,csat:avg(byAgent[a],"CSAT"),surv:sum(byAgent[a],"Surveys")})).filter(x=>x.csat!==null).sort((a,b)=>b.csat-a.csat).slice(0,15).reverse();Plotly.react("topAgents",[{x:agents.map(x=>x.csat),y:agents.map(x=>x.a),type:"bar",orientation:"h",text:agents.map(x=>`${x.csat.toFixed(1)}% | ${x.surv} surveys`)}],{...layout,xaxis:{title:"CSAT %"}},{responsive:true});
+Plotly.react("opsChart",[{x:weeks,y:weeks.map(w=>avg(byWeek[w],"OnlineHours")),name:"Online Hours",type:"scatter",mode:"lines+markers"},{x:weeks,y:weeks.map(w=>avg(byWeek[w],"OnlineDays")),name:"Online Days",type:"scatter",mode:"lines+markers"},{x:weeks,y:weeks.map(w=>avg(byWeek[w],"Acceptance")),name:"Acceptance %",type:"scatter",mode:"lines+markers"}],layout,{responsive:true})}
+function renderTable(d){const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];dataTable.innerHTML="<thead><tr>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead><tbody>"+d.slice(0,1000).map(r=>"<tr>"+cols.map(c=>`<td>${r[c]??""}</td>`).join("")+"</tr>").join("")+"</tbody>"}
+function update(){const d=filtered();renderKPIs(d);renderCharts(d);renderTable(d);status.textContent=`Showing ${d.length.toLocaleString()} of ${rawData.length.toLocaleString()} rows. Last loaded: ${new Date().toLocaleString()}`}
+function load(){
+  const callbackName = "dashboardDataCallback_" + Date.now();
+  const script = document.createElement("script");
+  const timeout = setTimeout(() => {
+    status.innerHTML = '<span class="error">Data load timed out.</span> Please confirm the Apps Script is deployed as a Web App and accessible.';
+    try { document.body.removeChild(script); } catch(e) {}
+    delete window[callbackName];
+  }, 20000);
+
+  window[callbackName] = function(json){
+    clearTimeout(timeout);
+    try {
+      rawData = clean(json);
+      ["week","tech","lead","location","agentType"].forEach((id,i)=>fillFilter(id,["Week","Tech","Lead","Location","AgentType"][i]));
+      update();
+    } catch(e) {
+      status.innerHTML = '<span class="error">Error processing sheet data:</span> ' + e.message;
+    }
+    try { document.body.removeChild(script); } catch(e) {}
+    delete window[callbackName];
+  };
+
+  script.onerror = function(){
+    clearTimeout(timeout);
+    status.innerHTML = '<span class="error">Could not load Apps Script data.</span> Open the Apps Script URL directly and confirm it returns data.';
+    delete window[callbackName];
+  };
+
+  script.src = API_URL + "?callback=" + callbackName + "&cacheBust=" + Date.now();
+  document.body.appendChild(script);
+}
+["week","tech","lead","location","agentType"].forEach((id,i)=>fillFilter(id,["Week","Tech","Lead","Location","AgentType"][i]));update()}catch(e){status.innerHTML='<span class="error">Error loading Google Sheet API:</span> '+e.message+'<br>Open the Apps Script web app URL directly once to verify it returns JSON.'}}
+["week","tech","lead","location","agentType"].forEach((id,i)=>fillFilter(id,["Week","Tech","Lead","Location","AgentType"][i]));update()}catch(e){status.innerHTML='<span class="error">Error loading Google Sheet:</span> '+e.message+'<br>Make sure the sheet is published as CSV.'}}
+["week","tech","lead","location","agentType","agentSearch"].forEach(id=>document.getElementById(id).addEventListener("input",update));load();
+</script></body></html>
