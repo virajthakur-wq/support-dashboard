@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Support Performance Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root{
+      --bg:#f4f6fb; --panel:#ffffff; --text:#172033; --muted:#667085; --border:#e3e8f2;
+      --accent:#2563eb; --good:#16a34a; --warn:#d97706; --bad:#dc2626; --shadow:0 8px 30px rgba(23,32,51,.08);
+    }
+    [data-theme="dark"]{
+      --bg:#0f172a; --panel:#111c33; --text:#e5e7eb; --muted:#9ca3af; --border:#26334d;
+      --accent:#60a5fa; --shadow:0 8px 30px rgba(0,0,0,.28);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#111827,#1d4ed8);color:white;padding:18px 24px;box-shadow:var(--shadow)}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    h1{margin:0;font-size:24px;letter-spacing:-.02em}
+    .subtitle{margin:6px 0 0;color:#dbeafe;font-size:13px}
+    .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    button,.file-label{border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:white;border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:600;font-size:13px}
+    button:hover,.file-label:hover{background:rgba(255,255,255,.2)}
+    input[type=file]{display:none}
+    main{padding:20px;max-width:1600px;margin:0 auto}
+    .filters{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow);display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+    label{font-size:12px;color:var(--muted);font-weight:700;display:block;margin-bottom:6px}
+    select,input[type=search],input[type=number]{width:100%;padding:9px 10px;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:10px}
+    .kpis{display:grid;grid-template-columns:repeat(8,minmax(145px,1fr));gap:14px;margin-bottom:18px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+    .kpi-title{font-size:12px;color:var(--muted);font-weight:700}
+    .kpi-value{font-size:25px;font-weight:800;margin-top:8px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+    .wide{grid-column:1/-1}
+    .chart{height:390px}
+    .smallchart{height:330px}
+    .table-wrap{overflow:auto;max-height:520px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{border-bottom:1px solid var(--border);padding:9px 10px;text-align:left;white-space:nowrap}
+    th{position:sticky;top:0;background:var(--panel);z-index:1;color:var(--muted)}
+    .status{margin-top:8px;font-size:13px;color:#dbeafe}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:999px;background:rgba(37,99,235,.12);color:var(--accent);font-size:12px;font-weight:700}
+    .hidden{display:none}
+    .note{font-size:12px;color:var(--muted);margin-top:8px}
+    @media(max-width:1200px){.filters{grid-template-columns:repeat(3,1fr)}.kpis{grid-template-columns:repeat(4,1fr)}}
+    @media(max-width:800px){.filters,.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}main{padding:12px}.chart{height:330px}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div>
+      <h1>Support Performance Dashboard</h1>
+      <div class="subtitle">Upload a JSON file, filter globally, and analyze CSAT, response efficiency, surveys, productivity, and outliers.</div>
+      <div id="status" class="status">Ready. Upload a JSON file to begin.</div>
+    </div>
+    <div class="actions">
+      <label class="file-label" for="fileInput">Upload JSON</label>
+      <input id="fileInput" type="file" accept=".json,application/json"/>
+      <button id="themeBtn">Dark Mode</button>
+      <button id="csvBtn">Export CSV</button>
+      <button id="resetBtn">Reset Filters</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="filters">
+    <div><label>Week</label><select id="weekFilter" multiple size="4"></select></div>
+    <div><label>Tech</label><select id="techFilter" multiple size="4"></select></div>
+    <div><label>Lead</label><select id="leadFilter" multiple size="4"></select></div>
+    <div><label>Location</label><select id="locationFilter" multiple size="4"></select></div>
+    <div><label>Agent Type</label><select id="agentTypeFilter" multiple size="4"></select></div>
+    <div><label>Agent Search</label><input id="agentSearch" type="search" placeholder="Search alias..."/><div class="note">Applies to all charts.</div></div>
+    <div><label>Minimum Surveys</label><input id="minSurveys" type="number" min="0" step="1" value="0"/><div class="note">Use to remove low-sample CSAT noise.</div></div>
+  </section>
+
+  <section class="kpis" id="kpiGrid"></section>
+
+  <section class="grid">
+    <div class="card wide"><div class="pill">Weekly Trends</div><div id="trendChart" class="chart"></div></div>
+    <div class="card"><div class="pill">CSAT by Tech</div><div id="techChart" class="smallchart"></div></div>
+    <div class="card"><div class="pill">Lead Performance</div><div id="leadChart" class="smallchart"></div></div>
+    <div class="card"><div class="pill">Performance Quadrant</div><div id="quadrantChart" class="chart"></div></div>
+    <div class="card"><div class="pill">Location / Agent Type</div><div id="segmentChart" class="chart"></div></div>
+    <div class="card"><div class="pill">Top Agents by CSAT</div><div id="topAgentsChart" class="smallchart"></div></div>
+    <div class="card"><div class="pill">Outlier Watchlist</div><div id="outlierChart" class="smallchart"></div></div>
+    <div class="card wide">
+      <div class="pill">Filtered Agent Detail</div>
+      <div class="note">Click table headers are not interactive; use browser search or dashboard filters.</div>
+      <div class="table-wrap"><table id="dataTable"></table></div>
+    </div>
+  </section>
+</main>
+
+<script>
+let rawData = [];
+let filteredData = [];
+let dark = false;
+
+const fields = {
+  week:"Week", alias:"Alias", tech:"Tech", location:"Location", lead:"Lead", agentType:"Agent Type",
+  csat:"CSAT %", surveys:"Surveys", aht:"AHT (m)", frt:"FRT (s)", art:"ART (s)", hours:"Avg Online Hours",
+  days:"Online Days", acceptance:"Acceptance Rate"
+};
+
+function parseNum(v){
+  if(v === null || v === undefined || v === "") return null;
+  if(typeof v === "number") return isFinite(v) ? v : null;
+  const s = String(v).replace(/,/g,"").replace("%","").trim();
+  const n = Number(s);
+  return isFinite(n) ? n : null;
+}
+function cleanRow(r){
+  return {
+    Week: r[fields.week] || "",
+    Alias: r[fields.alias] || "",
+    Tech: r[fields.tech] || "Unassigned",
+    Location: r[fields.location] || "Unassigned",
+    Lead: r[fields.lead] || "Unassigned",
+    AgentType: r[fields.agentType] || "Unassigned",
+    CSAT: parseNum(r[fields.csat]),
+    Surveys: parseNum(r[fields.surveys]) || 0,
+    AHT: parseNum(r[fields.aht]),
+    FRT: parseNum(r[fields.frt]),
+    ART: parseNum(r[fields.art]),
+    Hours: parseNum(r[fields.hours]),
+    Days: parseNum(r[fields.days]),
+    Acceptance: parseNum(r[fields.acceptance])
+  };
+}
+function avg(arr, key){
+  const vals = arr.map(x=>x[key]).filter(v=>v !== null && v !== undefined && isFinite(v));
+  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+}
+function sum(arr,key){return arr.reduce((a,b)=>a+(parseNum(b[key])||0),0)}
+function fmt(v, suffix="", digits=1){return v===null || !isFinite(v) ? "—" : `${v.toFixed(digits)}${suffix}`}
+function unique(key){return [...new Set(rawData.map(d=>d[key]).filter(Boolean))].sort()}
+function selected(id){return [...document.getElementById(id).selectedOptions].map(o=>o.value)}
+function populateSelect(id, values){
+  const el = document.getElementById(id);
+  el.innerHTML = values.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join("");
+}
+function groupBy(arr, key){
+  const m = new Map();
+  arr.forEach(d=>{const k=d[key]||"Unassigned"; if(!m.has(k))m.set(k,[]); m.get(k).push(d);});
+  return [...m.entries()].map(([name,rows])=>({name,rows}));
+}
+function weightedCSAT(rows){
+  const valid = rows.filter(r=>r.CSAT!==null && r.Surveys>0);
+  const total = valid.reduce((a,r)=>a+r.Surveys,0);
+  return total ? valid.reduce((a,r)=>a+(r.CSAT*r.Surveys),0)/total : avg(rows,"CSAT");
+}
+function applyFilters(){
+  const w=selected("weekFilter"), t=selected("techFilter"), l=selected("leadFilter"), loc=selected("locationFilter"), at=selected("agentTypeFilter");
+  const q=document.getElementById("agentSearch").value.toLowerCase().trim();
+  const minS=parseNum(document.getElementById("minSurveys").value)||0;
+  filteredData = rawData.filter(d =>
+    (!w.length || w.includes(d.Week)) &&
+    (!t.length || t.includes(d.Tech)) &&
+    (!l.length || l.includes(d.Lead)) &&
+    (!loc.length || loc.includes(d.Location)) &&
+    (!at.length || at.includes(d.AgentType)) &&
+    (!q || d.Alias.toLowerCase().includes(q)) &&
+    (d.Surveys >= minS)
+  );
+  render();
+}
+function loadData(arr){
+  rawData = arr.map(cleanRow).filter(d=>d.Alias || d.Week);
+  populateSelect("weekFilter", unique("Week"));
+  populateSelect("techFilter", unique("Tech"));
+  populateSelect("leadFilter", unique("Lead"));
+  populateSelect("locationFilter", unique("Location"));
+  populateSelect("agentTypeFilter", unique("AgentType"));
+  document.getElementById("status").textContent = `Loaded ${rawData.length.toLocaleString()} rows.`;
+  applyFilters();
+}
+function kpi(title,value){
+  return `<div class="card"><div class="kpi-title">${title}</div><div class="kpi-value">${value}</div></div>`
+}
+function renderKPIs(){
+  const agents = new Set(filteredData.map(d=>d.Alias)).size;
+  const weeks = new Set(filteredData.map(d=>d.Week)).size;
+  document.getElementById("kpiGrid").innerHTML =
+    kpi("Avg CSAT", fmt(weightedCSAT(filteredData),"%",1))+
+    kpi("Total Surveys", sum(filteredData,"Surveys").toLocaleString())+
+    kpi("Avg AHT", fmt(avg(filteredData,"AHT"),"m",1))+
+    kpi("Avg FRT", fmt(avg(filteredData,"FRT"),"s",1))+
+    kpi("Avg ART", fmt(avg(filteredData,"ART"),"s",1))+
+    kpi("Acceptance", fmt(avg(filteredData,"Acceptance"),"%",1))+
+    kpi("Active Agents", agents.toLocaleString())+
+    kpi("Weeks", weeks.toLocaleString());
+}
+function layout(title=""){
+  return {
+    title:{text:title,font:{size:14}},
+    paper_bgcolor:"rgba(0,0,0,0)", plot_bgcolor:"rgba(0,0,0,0)",
+    font:{color:getComputedStyle(document.body).getPropertyValue("--text")},
+    margin:{l:55,r:25,t:35,b:55},
+    legend:{orientation:"h"}
+  };
+}
+function renderTrends(){
+  const g=groupBy(filteredData,"Week").sort((a,b)=>a.name.localeCompare(b.name));
+  const x=g.map(d=>d.name);
+  Plotly.react("trendChart",[
+    {x,y:g.map(d=>weightedCSAT(d.rows)),name:"CSAT %",type:"scatter",mode:"lines+markers"},
+    {x,y:g.map(d=>avg(d.rows,"AHT")),name:"AHT m",type:"scatter",mode:"lines+markers",yaxis:"y2"},
+    {x,y:g.map(d=>avg(d.rows,"FRT")),name:"FRT s",type:"scatter",mode:"lines+markers",yaxis:"y3"}
+  ], {...layout(), yaxis:{title:"CSAT %"}, yaxis2:{title:"AHT",overlaying:"y",side:"right"}, yaxis3:{title:"FRT",anchor:"free",overlaying:"y",side:"right",position:.94}, hovermode:"x unified"}, {responsive:true});
+}
+function renderBar(id, key, metric, title, max=12){
+  const g=groupBy(filteredData,key).map(x=>({name:x.name, val:metric(x.rows), surveys:sum(x.rows,"Surveys")})).sort((a,b)=>b.val-a.val).slice(0,max).reverse();
+  Plotly.react(id,[{x:g.map(d=>d.val),y:g.map(d=>d.name),text:g.map(d=>`Surveys: ${d.surveys}`),type:"bar",orientation:"h",hovertemplate:"%{y}<br>%{x:.1f}<br>%{text}<extra></extra>"}], layout(title), {responsive:true});
+}
+function renderQuadrant(){
+  const g=groupBy(filteredData,"Alias").map(x=>({name:x.name, csat:weightedCSAT(x.rows), aht:avg(x.rows,"AHT"), surveys:sum(x.rows,"Surveys"), tech:x.rows[0]?.Tech||""})).filter(d=>d.csat!==null&&d.aht!==null);
+  Plotly.react("quadrantChart",[{
+    x:g.map(d=>d.aht), y:g.map(d=>d.csat), text:g.map(d=>d.name), customdata:g.map(d=>[d.tech,d.surveys]),
+    mode:"markers", type:"scatter", marker:{size:g.map(d=>Math.max(8,Math.sqrt(d.surveys)*4)), opacity:.72},
+    hovertemplate:"%{text}<br>Tech: %{customdata[0]}<br>AHT: %{x:.1f}m<br>CSAT: %{y:.1f}%<br>Surveys: %{customdata[1]}<extra></extra>"
+  }], {...layout(), xaxis:{title:"AHT (minutes)"}, yaxis:{title:"CSAT %"}}, {responsive:true});
+}
+function renderSegment(){
+  const loc=groupBy(filteredData,"Location").map(x=>({name:x.name, csat:weightedCSAT(x.rows)}));
+  const type=groupBy(filteredData,"AgentType").map(x=>({name:x.name, csat:weightedCSAT(x.rows)}));
+  Plotly.react("segmentChart",[
+    {x:loc.map(d=>d.name), y:loc.map(d=>d.csat), name:"Location CSAT", type:"bar"},
+    {x:type.map(d=>d.name), y:type.map(d=>d.csat), name:"Agent Type CSAT", type:"bar"}
+  ], {...layout(), yaxis:{title:"CSAT %"}}, {responsive:true});
+}
+function renderOutliers(){
+  const rows=filteredData.map(d=>{
+    let score=0;
+    if(d.CSAT!==null && d.CSAT<80) score++;
+    if(d.AHT!==null && d.AHT>30) score++;
+    if(d.FRT!==null && d.FRT>60) score++;
+    if(d.ART!==null && d.ART>90) score++;
+    if(d.Acceptance!==null && d.Acceptance<95) score++;
+    return {...d, score};
+  }).filter(d=>d.score>0).sort((a,b)=>b.score-a.score || b.Surveys-a.Surveys).slice(0,15).reverse();
+  Plotly.react("outlierChart",[{x:rows.map(d=>d.score),y:rows.map(d=>d.Alias),type:"bar",orientation:"h",hovertemplate:"%{y}<br>Flags: %{x}<extra></extra>"}], layout("CSAT<80, AHT>30, FRT>60, ART>90, Acceptance<95"), {responsive:true});
+}
+function renderTable(){
+  const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","Hours","Days","Acceptance"];
+  const rows=filteredData.slice().sort((a,b)=>String(a.Week).localeCompare(String(b.Week)) || String(a.Alias).localeCompare(String(b.Alias))).slice(0,1000);
+  document.getElementById("dataTable").innerHTML = `<thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>`+
+    rows.map(r=>`<tr>${cols.map(c=>`<td>${r[c]??""}</td>`).join("")}</tr>`).join("")+`</tbody>`;
+}
+function render(){
+  document.getElementById("status").textContent = `Showing ${filteredData.length.toLocaleString()} of ${rawData.length.toLocaleString()} rows.`;
+  renderKPIs(); renderTrends(); renderBar("techChart","Tech",weightedCSAT,"Weighted CSAT by Tech",10);
+  renderBar("leadChart","Lead",weightedCSAT,"Weighted CSAT by Lead",12);
+  renderQuadrant(); renderSegment(); renderBar("topAgentsChart","Alias",weightedCSAT,"Top Agents",12);
+  renderOutliers(); renderTable();
+}
+document.getElementById("fileInput").addEventListener("change", e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const json=JSON.parse(ev.target.result);
+      if(!Array.isArray(json)) throw new Error("JSON must be an array of records.");
+      loadData(json);
+    }catch(err){alert("Could not load JSON: "+err.message);}
+  };
+  reader.readAsText(file);
+});
+["weekFilter","techFilter","leadFilter","locationFilter","agentTypeFilter","agentSearch","minSurveys"].forEach(id=>{
+  document.getElementById(id).addEventListener("input", applyFilters);
+  document.getElementById(id).addEventListener("change", applyFilters);
+});
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  ["weekFilter","techFilter","leadFilter","locationFilter","agentTypeFilter"].forEach(id=>[...document.getElementById(id).options].forEach(o=>o.selected=false));
+  document.getElementById("agentSearch").value=""; document.getElementById("minSurveys").value=0; applyFilters();
+});
+document.getElementById("themeBtn").addEventListener("click",()=>{
+  dark=!dark; document.body.dataset.theme=dark?"dark":"light"; document.getElementById("themeBtn").textContent=dark?"Light Mode":"Dark Mode"; render();
+});
+document.getElementById("csvBtn").addEventListener("click",()=>{
+  const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","Hours","Days","Acceptance"];
+  const csv=[cols.join(",")].concat(filteredData.map(r=>cols.map(c=>`"${String(r[c]??"").replace(/"/g,'""')}"`).join(","))).join("\n");
+  const blob=new Blob([csv],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="filtered_support_performance.csv"; a.click(); URL.revokeObjectURL(a.href);
+});
+
+// Small sample so the page is not blank before upload.
+loadData([
+ {"Week":"2026-W24","Alias":"Sample Agent","Tech":"UniFi OS","Location":"Delhi","Lead":"Sample Lead","Agent Type":"Tenured","CSAT %":"90.00%","Surveys":10,"AHT (m)":22,"FRT (s)":30,"ART (s)":55,"Avg Online Hours":6.2,"Online Days":5,"Acceptance Rate":"99.00%"},
+ {"Week":"2026-W25","Alias":"Sample Agent 2","Tech":"UniFi Protect","Location":"Mumbai","Lead":"Sample Lead 2","Agent Type":"OJT","CSAT %":"84.00%","Surveys":25,"AHT (m)":26,"FRT (s)":45,"ART (s)":70,"Avg Online Hours":6.5,"Online Days":5,"Acceptance Rate":"98.00%"}
+]);
+</script>
+</body>
+</html>
