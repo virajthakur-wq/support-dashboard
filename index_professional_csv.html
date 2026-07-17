@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support Performance Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{
+  --bg:#f4f7fb;--panel:#ffffff;--panel2:#f8fafc;--text:#102033;--muted:#64748b;--line:#dbe4ef;
+  --blue:#2563eb;--green:#16a34a;--amber:#f59e0b;--red:#dc2626;--shadow:0 14px 36px rgba(15,23,42,.08);
+}
+[data-theme="dark"]{
+  --bg:#0b1220;--panel:#111a2e;--panel2:#16233a;--text:#eaf1fb;--muted:#95a3b8;--line:#25354f;
+  --blue:#60a5fa;--green:#22c55e;--amber:#fbbf24;--red:#f87171;--shadow:0 14px 36px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+.hero{padding:22px 30px;background:linear-gradient(135deg,#0f172a,#1d4ed8);color:white}
+.hero-row{display:flex;justify-content:space-between;gap:16px;align-items:center}
+h1{margin:0;font-size:27px;letter-spacing:-.03em}.subtitle{margin:8px 0 0;color:#dbeafe;font-size:14px}
+.actions{display:flex;gap:10px;align-items:center}
+.btn{border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.14);color:#fff;border-radius:12px;padding:10px 12px;cursor:pointer;font-weight:700}
+.toolbar{display:grid;grid-template-columns:repeat(6,minmax(140px,1fr));gap:12px;padding:16px 30px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+select,input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--text);outline:none}
+.status{padding:11px 30px;color:var(--muted);font-size:13px}.error{color:var(--red);font-weight:800}
+main{padding:22px 30px}
+.kpis{display:grid;grid-template-columns:repeat(8,1fr);gap:14px;margin-bottom:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.kpi{padding:17px}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:800}.value{font-size:27px;font-weight:900;margin-top:8px;letter-spacing:-.03em}.delta{font-size:12px;margin-top:6px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}.wide{grid-column:1/-1}.chart{height:390px;padding:8px}.chart-sm{height:330px;padding:8px}
+.section-title{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);font-weight:900}
+.pill{font-size:12px;color:var(--muted);font-weight:700}
+.tablewrap{max-height:500px;overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{position:sticky;top:0;background:var(--panel2);z-index:1}
+.bad{color:var(--red);font-weight:800}.good{color:var(--green);font-weight:800}
+@media(max-width:1300px){.kpis{grid-template-columns:repeat(4,1fr)}.toolbar{grid-template-columns:repeat(3,1fr)}.grid,.split{grid-template-columns:1fr}}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.toolbar{grid-template-columns:1fr}.hero-row{flex-direction:column;align-items:flex-start}main{padding:14px}.hero{padding:18px}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-row">
+    <div>
+      <h1>Support Performance Dashboard</h1>
+      <div class="subtitle">Executive view powered by <b>data.csv</b>. Replace data.csv weekly in GitHub and keep the same manager link.</div>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="toggleTheme()">Dark / Light</button>
+      <button class="btn" onclick="exportCSV()">Export Filtered CSV</button>
+    </div>
+  </div>
+</header>
+
+<div class="toolbar">
+<select id="week"><option value="">All Weeks</option></select>
+<select id="tech"><option value="">All Tech</option></select>
+<select id="lead"><option value="">All Leads</option></select>
+<select id="location"><option value="">All Locations</option></select>
+<select id="agentType"><option value="">All Agent Types</option></select>
+<input id="agentSearch" placeholder="Search agent...">
+</div>
+<div id="status" class="status">Loading data.csv...</div>
+
+<main>
+<section id="kpis" class="kpis"></section>
+
+<section class="grid">
+  <div class="card wide"><div class="section-title">Weekly Trends <span class="pill">CSAT, AHT, FRT, ART</span></div><div id="trend" class="chart"></div></div>
+  <div class="card"><div class="section-title">Performance Quadrant <span class="pill">AHT vs CSAT</span></div><div id="quadrant" class="chart"></div></div>
+  <div class="card"><div class="section-title">Lead Scorecard <span class="pill">CSAT weighted view</span></div><div id="leadChart" class="chart"></div></div>
+</section>
+
+<section class="split" style="margin-top:18px">
+  <div class="card"><div class="section-title">CSAT by Tech</div><div id="techChart" class="chart-sm"></div></div>
+  <div class="card"><div class="section-title">Location Comparison</div><div id="locationChart" class="chart-sm"></div></div>
+  <div class="card"><div class="section-title">Top Agents</div><div id="topAgents" class="chart-sm"></div></div>
+  <div class="card"><div class="section-title">Coaching Watchlist</div><div id="watchlist" class="chart-sm"></div></div>
+  <div class="card"><div class="section-title">Operational Metrics</div><div id="opsChart" class="chart-sm"></div></div>
+  <div class="card"><div class="section-title">Agent Type Comparison</div><div id="typeChart" class="chart-sm"></div></div>
+  <div class="card wide"><div class="section-title">Filtered Data <span class="pill" id="rowCount"></span></div><div class="tablewrap"><table id="dataTable"></table></div></div>
+</section>
+</main>
+
+<script>
+let rawData=[], lastFiltered=[];
+
+function parseCSV(text){
+  const rows=[]; let row=[], field="", quote=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i], n=text[i+1];
+    if(c=='"' && quote && n=='"'){ field+='"'; i++; }
+    else if(c=='"'){ quote=!quote; }
+    else if(c==',' && !quote){ row.push(field); field=""; }
+    else if((c=='\n'||c=='\r') && !quote){
+      if(field!=="" || row.length){ row.push(field); rows.push(row); row=[]; field=""; }
+      if(c=='\r' && n=='\n') i++;
+    } else field += c;
+  }
+  if(field!=="" || row.length){ row.push(field); rows.push(row); }
+  const headers=rows.shift().map(h=>h.trim());
+  return rows.filter(r=>r.some(x=>String(x).trim()!="")).map(r=>{const obj={};headers.forEach((h,i)=>obj[h]=(r[i]||"").trim());return obj;});
+}
+function num(v){ if(v===null||v===undefined||v==="") return null; const n=parseFloat(String(v).replace(/,/g,"").replace("%","")); return Number.isFinite(n)?n:null; }
+function clean(data){ return data.map(r=>({Week:r["Week"]||"",Alias:r["Alias"]||"",Tech:r["Tech"]||"",Location:r["Location"]||"",Lead:r["Lead"]||"",AgentType:r["Agent Type"]||"",CSAT:num(r["CSAT %"]),Surveys:num(r["Surveys"]),AHT:num(r["AHT (m)"]),FRT:num(r["FRT (s)"]),ART:num(r["ART (s)"]),OnlineHours:num(r["Avg Online Hours"]),OnlineDays:num(r["Online Days"]),Acceptance:num(r["Acceptance Rate"])})).filter(r=>r.Week||r.Alias); }
+function avg(a,k){const x=a.map(r=>r[k]).filter(v=>v!==null);return x.length?x.reduce((p,c)=>p+c,0)/x.length:null}
+function sum(a,k){return a.map(r=>r[k]).filter(v=>v!==null).reduce((p,c)=>p+c,0)}
+function weightedAvg(a,k,w){let n=0,d=0;a.forEach(r=>{if(r[k]!==null&&r[w]!==null){n+=r[k]*r[w];d+=r[w]}});return d?n/d:avg(a,k)}
+function group(a,k){const m={};a.forEach(r=>{const key=r[k]||"Unassigned";(m[key]=m[key]||[]).push(r)});return m}
+function fmt(v,s){if(v===null||Number.isNaN(v))return"—";if(s==="%")return v.toFixed(1)+"%";if(s==="")return Math.round(v).toLocaleString();return v.toFixed(1)+s}
+function kpiCard(l,v,d=""){return `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="delta">${d}</div></div>`}
+function fillFilter(id,key,label){const el=document.getElementById(id),old=el.value;const vals=[...new Set(rawData.map(r=>r[key]).filter(Boolean))].sort();el.innerHTML=`<option value="">All ${label}</option>`;vals.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;el.appendChild(o)});if(vals.includes(old))el.value=old}
+function filtered(){const q=agentSearch.value.toLowerCase();return rawData.filter(r=>(!week.value||r.Week===week.value)&&(!tech.value||r.Tech===tech.value)&&(!lead.value||r.Lead===lead.value)&&(!location.value||r.Location===location.value)&&(!agentType.value||r.AgentType===agentType.value)&&(!q||r.Alias.toLowerCase().includes(q)))}
+function plotLayout(extra={}){return {margin:{l:45,r:25,t:20,b:60},paper_bgcolor:getComputedStyle(document.body).getPropertyValue('--panel'),plot_bgcolor:getComputedStyle(document.body).getPropertyValue('--panel'),font:{family:"Inter, Segoe UI, Arial",color:getComputedStyle(document.body).getPropertyValue('--text')},legend:{orientation:"h"},...extra}}
+function renderKPIs(d){
+ const agents=new Set(d.map(r=>r.Alias).filter(Boolean)).size;
+ const low=d.filter(r=>r.CSAT!==null&&r.CSAT<80&&(r.Surveys||0)>=10).length;
+ kpis.innerHTML=[
+  kpiCard("Avg CSAT",fmt(weightedAvg(d,"CSAT","Surveys"),"%"),"weighted by surveys"),
+  kpiCard("Total Surveys",fmt(sum(d,"Surveys"),""),"survey volume"),
+  kpiCard("Avg AHT",fmt(avg(d,"AHT"),"m"),"lower is better"),
+  kpiCard("Avg FRT",fmt(avg(d,"FRT"),"s"),"first response"),
+  kpiCard("Avg ART",fmt(avg(d,"ART"),"s"),"agent response"),
+  kpiCard("Acceptance",fmt(avg(d,"Acceptance"),"%"),"routing health"),
+  kpiCard("Active Agents",agents,"filtered view"),
+  kpiCard("Watchlist",low,"CSAT <80%, surveys ≥10")
+ ].join("");
+}
+function renderCharts(d){
+ if(!window.Plotly){status.innerHTML='<span class="error">Plotly did not load.</span>';return}
+ const byWeek=group(d,"Week"),weeks=Object.keys(byWeek).sort();
+ Plotly.react("trend",[
+  {x:weeks,y:weeks.map(w=>weightedAvg(byWeek[w],"CSAT","Surveys")),name:"CSAT %",type:"scatter",mode:"lines+markers"},
+  {x:weeks,y:weeks.map(w=>avg(byWeek[w],"AHT")),name:"AHT (m)",type:"scatter",mode:"lines+markers",yaxis:"y2"},
+  {x:weeks,y:weeks.map(w=>avg(byWeek[w],"FRT")),name:"FRT (s)",type:"scatter",mode:"lines+markers",yaxis:"y2"},
+  {x:weeks,y:weeks.map(w=>avg(byWeek[w],"ART")),name:"ART (s)",type:"scatter",mode:"lines+markers",yaxis:"y2"}
+ ],plotLayout({yaxis:{title:"CSAT %"},yaxis2:{title:"Time",overlaying:"y",side:"right",showgrid:false}}),{responsive:true});
+
+ Plotly.react("quadrant",[{x:d.map(r=>r.AHT),y:d.map(r=>r.CSAT),text:d.map(r=>`${r.Alias}<br>${r.Tech}<br>Lead: ${r.Lead}<br>Surveys: ${r.Surveys??"—"}`),mode:"markers",type:"scatter",marker:{size:d.map(r=>Math.max(8,Math.min(42,(r.Surveys||1)/2))),sizemode:"diameter",opacity:.75}}],plotLayout({xaxis:{title:"AHT (m)"},yaxis:{title:"CSAT %"},shapes:[{type:"line",x0:30,x1:30,y0:0,y1:100,line:{dash:"dot",color:"#94a3b8"}},{type:"line",x0:0,x1:600,y0:85,y1:85,line:{dash:"dot",color:"#94a3b8"}}]}),{responsive:true});
+
+ const byLead=group(d,"Lead"); const leads=Object.keys(byLead).map(k=>({k,csat:weightedAvg(byLead[k],"CSAT","Surveys"),surveys:sum(byLead[k],"Surveys")})).sort((a,b)=>a.csat-b.csat);
+ Plotly.react("leadChart",[{x:leads.map(x=>x.csat),y:leads.map(x=>x.k),type:"bar",orientation:"h",text:leads.map(x=>`${fmt(x.csat,"%")} | ${x.surveys} surveys`)}],plotLayout({xaxis:{title:"CSAT %"}}),{responsive:true});
+
+ const byTech=group(d,"Tech"),techs=Object.keys(byTech).sort();
+ Plotly.react("techChart",[{x:techs,y:techs.map(k=>weightedAvg(byTech[k],"CSAT","Surveys")),type:"bar",name:"CSAT %"},{x:techs,y:techs.map(k=>sum(byTech[k],"Surveys")),type:"scatter",mode:"lines+markers",name:"Surveys",yaxis:"y2"}],plotLayout({yaxis:{title:"CSAT %"},yaxis2:{title:"Surveys",overlaying:"y",side:"right",showgrid:false}}),{responsive:true});
+
+ const byLoc=group(d,"Location"),locs=Object.keys(byLoc).sort();
+ Plotly.react("locationChart",[{x:locs,y:locs.map(k=>weightedAvg(byLoc[k],"CSAT","Surveys")),type:"bar",name:"CSAT %"},{x:locs,y:locs.map(k=>avg(byLoc[k],"Acceptance")),type:"bar",name:"Acceptance %"}],plotLayout({barmode:"group"}),{responsive:true});
+
+ const byAgent=group(d,"Alias");
+ const agents=Object.keys(byAgent).map(a=>({a,csat:weightedAvg(byAgent[a],"CSAT","Surveys"),surv:sum(byAgent[a],"Surveys"),aht:avg(byAgent[a],"AHT")})).filter(x=>x.csat!==null&&x.surv>=10);
+ const top=[...agents].sort((a,b)=>b.csat-a.csat).slice(0,12).reverse();
+ Plotly.react("topAgents",[{x:top.map(x=>x.csat),y:top.map(x=>x.a),type:"bar",orientation:"h",text:top.map(x=>`${fmt(x.csat,"%")} | ${x.surv} surveys`)}],plotLayout({xaxis:{title:"CSAT %"}}),{responsive:true});
+ const watch=[...agents].filter(x=>x.csat<85||x.aht>30).sort((a,b)=>a.csat-b.csat).slice(0,12).reverse();
+ Plotly.react("watchlist",[{x:watch.map(x=>x.csat),y:watch.map(x=>x.a),type:"bar",orientation:"h",text:watch.map(x=>`${fmt(x.csat,"%")} | AHT ${fmt(x.aht,"m")}`)}],plotLayout({xaxis:{title:"CSAT %"}}),{responsive:true});
+
+ Plotly.react("opsChart",[{x:weeks,y:weeks.map(w=>avg(byWeek[w],"OnlineHours")),name:"Online Hours",type:"scatter",mode:"lines+markers"},{x:weeks,y:weeks.map(w=>avg(byWeek[w],"OnlineDays")),name:"Online Days",type:"scatter",mode:"lines+markers"},{x:weeks,y:weeks.map(w=>avg(byWeek[w],"Acceptance")),name:"Acceptance %",type:"scatter",mode:"lines+markers"}],plotLayout(),{responsive:true});
+
+ const byType=group(d,"AgentType"),types=Object.keys(byType).sort();
+ Plotly.react("typeChart",[{x:types,y:types.map(k=>weightedAvg(byType[k],"CSAT","Surveys")),type:"bar",name:"CSAT %"},{x:types,y:types.map(k=>avg(byType[k],"AHT")),type:"bar",name:"AHT"}],plotLayout({barmode:"group"}),{responsive:true});
+}
+function renderTable(d){
+ const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];
+ dataTable.innerHTML="<thead><tr>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead><tbody>"+d.slice(0,1500).map(r=>"<tr>"+cols.map(c=>{let val=r[c]??"";let cls=(c==="CSAT"&&val!==""&&val<80)?"bad":(c==="CSAT"&&val>=90)?"good":"";return `<td class="${cls}">${val}</td>`}).join("")+"</tr>").join("")+"</tbody>";
+ rowCount.textContent=`${d.length.toLocaleString()} rows`;
+}
+function update(){const d=filtered();lastFiltered=d;renderKPIs(d);renderCharts(d);renderTable(d);status.textContent=`Showing ${d.length.toLocaleString()} of ${rawData.length.toLocaleString()} rows. Last loaded: ${new Date().toLocaleString()}`}
+async function loadData(){
+ try{
+   const res=await fetch("data.csv?cacheBust="+Date.now());
+   if(!res.ok) throw new Error("Could not find data.csv next to index.html.");
+   rawData=clean(parseCSV(await res.text()));
+   fillFilter("week","Week","Weeks");fillFilter("tech","Tech","Tech");fillFilter("lead","Lead","Leads");fillFilter("location","Location","Locations");fillFilter("agentType","AgentType","Agent Types");
+   update();
+ }catch(e){status.innerHTML='<span class="error">Error loading data.csv:</span> '+e.message+'<br>Make sure data.csv is uploaded to the same GitHub repository folder as index.html.'}
+}
+function toggleTheme(){document.documentElement.dataset.theme=document.documentElement.dataset.theme==="dark"?"":"dark";update()}
+function exportCSV(){
+ const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];
+ const csv=[cols.join(",")].concat(lastFiltered.map(r=>cols.map(c=>`"${String(r[c]??"").replace(/"/g,'""')}"`).join(","))).join("\n");
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="filtered_dashboard_data.csv";a.click();
+}
+["week","tech","lead","location","agentType","agentSearch"].forEach(id=>document.getElementById(id).addEventListener("input",update));
+loadData();
+</script>
+</body>
+</html>
