@@ -403,21 +403,21 @@ html.dark th{
 <button class="header-btn reset-btn" id="resetBtn">↻ Reset Filters</button>
 <button class="header-btn export-btn" id="exportBtn">⇩ Export Data</button>
 </div></div></header>
-<div class="filters"><select id="week"><option value="">All Weeks</option></select><select id="tech"><option value="">All Tech</option></select><select id="lead"><option value="">All Leads</option></select><select id="location"><option value="">All Locations</option></select><select id="agentType"><option value="">All Agent Types</option></select><select id="agent"><option value="">All Agents</option></select></div>
+<div class="filters"><select id="periodType"><option value="Weekly">Weekly</option><option value="Monthly">Monthly</option></select><select id="period"><option value="">All Periods</option></select><select id="tech"><option value="">All Tech</option></select><select id="lead"><option value="">All Leads</option></select><select id="location"><option value="">All Locations</option></select><select id="agentType"><option value="">All Agent Types</option></select><select id="agent"><option value="">All Agents</option></select></div>
 <div id="status" class="status loading">Loading data.csv...</div>
 <div id="summary" class="summary"><span class="summary-title">Executive Summary</span>Loading summary...</div>
 <main>
 <section id="kpis" class="kpis"></section>
 
 <section class="card" style="margin-bottom:18px">
-  <div class="section-title">CSAT Trend <span class="pill">Primary metric · week-over-week</span></div>
+  <div class="section-title">CSAT Trend <span class="pill">Primary metric · period-over-period</span></div>
   <div id="csatTrend" class="chart"></div>
 </section>
 
 <section class="grid-2">
-  <div class="card"><div class="section-title">Survey Volume by Week <span class="pill">Confidence and coverage</span></div><div id="surveyTrend" class="chart"></div></div>
-  <div class="card"><div class="section-title">Team CSAT Comparison <span class="pill">Current vs previous week</span></div><div id="teamChart" class="chart"></div></div>
-  <div class="card"><div class="section-title">CSAT by Technology <span class="pill">Current week</span></div><div id="techChart" class="chart"></div></div>
+  <div class="card"><div class="section-title">Survey Volume by Period <span class="pill">Confidence and coverage</span></div><div id="surveyTrend" class="chart"></div></div>
+  <div class="card"><div class="section-title">Team CSAT Comparison <span class="pill">Current vs previous period</span></div><div id="teamChart" class="chart"></div></div>
+  <div class="card"><div class="section-title">CSAT by Technology <span class="pill">Current period</span></div><div id="techChart" class="chart"></div></div>
   <div class="card"><div class="section-title">Biggest CSAT Movers <span class="pill">Agents with survey coverage</span></div><div id="movers" class="movers"></div></div>
 </section>
 
@@ -438,14 +438,16 @@ let rawData=[],currentData=[];
 
 function parseCSV(text){const rows=[];let row=[],field="",quoted=false;for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];if(c==='"'&&quoted&&n==='"'){field+='"';i++;}else if(c==='"'){quoted=!quoted;}else if(c===','&&!quoted){row.push(field);field="";}else if((c==='\n'||c==='\r')&&!quoted){if(field!==""||row.length){row.push(field);rows.push(row);row=[];field="";}if(c==='\r'&&n==='\n')i++;}else field+=c;}if(field!==""||row.length){row.push(field);rows.push(row);}const headers=(rows.shift()||[]).map(h=>h.trim());return rows.filter(r=>r.some(x=>String(x).trim()!=="")).map(r=>{const o={};headers.forEach((h,i)=>o[h]=(r[i]||"").trim());return o;});}
 function num(v){if(v===null||v===undefined||v==="")return null;const n=parseFloat(String(v).replace(/,/g,"").replace("%",""));return Number.isFinite(n)?n:null;}
-function clean(data){return data.map(r=>({Week:r["Week"]||"",Alias:r["Alias"]||"",Tech:r["Tech"]||"",Location:r["Location"]||"",Lead:r["Lead"]||"",AgentType:r["Agent Type"]||"",CSAT:num(r["CSAT %"]),Surveys:num(r["Surveys"]),AHT:num(r["AHT (m)"]),FRT:num(r["FRT (s)"]),ART:num(r["ART (s)"]),OnlineHours:num(r["Avg Online Hours"]),OnlineDays:num(r["Online Days"]),Acceptance:num(r["Acceptance Rate"])})).filter(r=>r.Week||r.Alias);}
+function clean(data){return data.map(r=>{const period=r["Period"]||r["Week"]||"";const type=r["Period Type"]||(String(period).includes("-W")?"Weekly":"Monthly");return{PeriodType:type,Period:period,Alias:r["Alias"]||"",Tech:r["Tech"]||"",Location:r["Location"]||"",Lead:r["Lead"]||"",AgentType:r["Agent Type"]||"",CSAT:num(r["CSAT %"]),Surveys:num(r["Surveys"]),AHT:num(r["AHT (m)"]??r["AHT"]),FRT:num(r["FRT (s)"]??r["FRT"]),ART:num(r["ART (s)"]??r["ART"]),OnlineHours:num(r["Avg Online Hours"]),OnlineDays:num(r["Online Days"]),Acceptance:num(r["Acceptance Rate"])};}).filter(r=>r.Period||r.Alias);}
 function avg(a,k){const v=a.map(r=>r[k]).filter(x=>x!==null);return v.length?v.reduce((p,c)=>p+c,0)/v.length:null;}
 function sum(a,k){return a.map(r=>r[k]).filter(v=>v!==null).reduce((p,c)=>p+c,0);}
 function weightedAvg(a,k,w){let n=0,d=0;a.forEach(r=>{if(r[k]!==null&&r[w]!==null){n+=r[k]*r[w];d+=r[w];}});return d?n/d:avg(a,k);}
 function group(a,k){const m={};a.forEach(r=>{const key=r[k]||"Unassigned";(m[key]=m[key]||[]).push(r);});return m;}
-function orderedWeeks(data=rawData){const seen=[];data.forEach(r=>{if(r.Week&&!seen.includes(r.Week))seen.push(r.Week);});return seen;}
-function filterWithoutWeek(){const v={Tech:tech.value,Lead:lead.value,Location:document.getElementById("location").value,AgentType:agentType.value,Alias:agent.value};return rawData.filter(r=>(!v.Tech||r.Tech===v.Tech)&&(!v.Lead||r.Lead===v.Lead)&&(!v.Location||r.Location===v.Location)&&(!v.AgentType||r.AgentType===v.AgentType)&&(!v.Alias||r.Alias===v.Alias));}
-function comparisonContext(){const base=filterWithoutWeek(),weeks=orderedWeeks(base);let current=week.value||weeks[weeks.length-1]||"",idx=weeks.indexOf(current);if(idx<0)idx=weeks.length-1;const previous=idx>0?weeks[idx-1]:"";return{base,weeks,current,previous,currentData:base.filter(r=>r.Week===current),previousData:base.filter(r=>r.Week===previous)};}
+function periodLabel(value,type=periodType.value){if(!value)return"";if(type==="Monthly"&&/^\d{4}-\d{2}$/.test(value)){const [y,m]=value.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});}if(type==="Weekly"){const m=value.match(/^(\d{4})-W(\d{1,2})$/);if(m)return `Week ${Number(m[2])}, ${m[1]}`;}return value;}
+function orderedPeriods(data=rawData){return[...new Set(data.map(r=>r.Period).filter(Boolean))].sort();}
+function filterWithoutPeriod(){const v={PeriodType:periodType.value,Tech:tech.value,Lead:lead.value,Location:document.getElementById("location").value,AgentType:agentType.value,Alias:agent.value};return rawData.filter(r=>(!v.PeriodType||r.PeriodType===v.PeriodType)&&(!v.Tech||r.Tech===v.Tech)&&(!v.Lead||r.Lead===v.Lead)&&(!v.Location||r.Location===v.Location)&&(!v.AgentType||r.AgentType===v.AgentType)&&(!v.Alias||r.Alias===v.Alias));}
+function populatePeriods(keepSelection=true){const el=document.getElementById("period"),old=keepSelection?el.value:"",type=periodType.value;const vals=orderedPeriods(rawData.filter(r=>!type||r.PeriodType===type));el.innerHTML='<option value="">All Periods</option>';vals.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=periodLabel(v,type);el.appendChild(o);});if(vals.includes(old))el.value=old;else if(vals.length)el.value=vals[vals.length-1];}
+function comparisonContext(){const base=filterWithoutPeriod(),periods=orderedPeriods(base);let current=period.value||periods[periods.length-1]||"",idx=periods.indexOf(current);if(idx<0)idx=periods.length-1;const previous=idx>0?periods[idx-1]:"";return{base,periods,current,previous,currentData:base.filter(r=>r.Period===current),previousData:base.filter(r=>r.Period===previous)};}
 function delta(current,previous){return current===null||previous===null?null:current-previous;}
 function deltaHtml(v,suffix="",invert=false){if(v===null)return'<span class="delta-flat">—</span>';const cls=Math.abs(v)<.05?"delta-flat":((invert?v<0:v>0)?"delta-up":"delta-down");const arrow=Math.abs(v)<.05?"→":v>0?"▲":"▼";return `<span class="${cls}">${arrow} ${Math.abs(v).toFixed(1)}${suffix}</span>`;}
 function watchCount(data){return agentAggregates(data).filter(a=>(a.CSAT!==null&&a.CSAT<80)||(a.AHT!==null&&a.AHT>30)||(a.FRT!==null&&a.FRT>60)||(a.ART!==null&&a.ART>90)||(a.Acceptance!==null&&a.Acceptance<95)).length;}
@@ -454,12 +456,12 @@ function fmt(v,s){if(v===null||Number.isNaN(v))return"—";if(s==="%")return v.t
 function normalize(vals,invert=false){const v=vals.filter(x=>x!==null);if(!v.length)return vals.map(()=>50);const mn=Math.min(...v),mx=Math.max(...v);if(mn===mx)return vals.map(x=>x===null?50:100);return vals.map(x=>x===null?50:(invert?100-(x-mn)/(mx-mn)*100:(x-mn)/(mx-mn)*100));}
 function agentAggregates(d){const g=group(d,"Alias");const a=Object.keys(g).filter(x=>x!=="Unassigned").map(name=>{const r=g[name];return{Alias:name,Tech:r.find(x=>x.Tech)?.Tech||"",Location:r.find(x=>x.Location)?.Location||"",Lead:r.find(x=>x.Lead)?.Lead||"",AgentType:r.find(x=>x.AgentType)?.AgentType||"",CSAT:weightedAvg(r,"CSAT","Surveys"),Surveys:sum(r,"Surveys"),AHT:avg(r,"AHT"),FRT:avg(r,"FRT"),ART:avg(r,"ART"),OnlineHours:avg(r,"OnlineHours"),Acceptance:avg(r,"Acceptance")};});const cs=normalize(a.map(x=>x.CSAT)),ah=normalize(a.map(x=>x.AHT),true),ar=normalize(a.map(x=>x.ART),true),fr=normalize(a.map(x=>x.FRT),true),oh=normalize(a.map(x=>x.OnlineHours)),ac=normalize(a.map(x=>x.Acceptance));a.forEach((x,i)=>x.Score=cs[i]*.60+ah[i]*.15+ar[i]*.10+fr[i]*.05+oh[i]*.05+ac[i]*.05);return a;}
 function populateSelect(id,key,label){const el=document.getElementById(id);const vals=[...new Set(rawData.map(r=>r[key]).filter(Boolean))].sort();el.innerHTML=`<option value="">All ${label}</option>`;vals.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;el.appendChild(o);});}
-function getFiltered(){const v={Week:week.value,Tech:tech.value,Lead:lead.value,Location:document.getElementById("location").value,AgentType:agentType.value,Alias:agent.value};return rawData.filter(r=>(!v.Week||r.Week===v.Week)&&(!v.Tech||r.Tech===v.Tech)&&(!v.Lead||r.Lead===v.Lead)&&(!v.Location||r.Location===v.Location)&&(!v.AgentType||r.AgentType===v.AgentType)&&(!v.Alias||r.Alias===v.Alias));}
+function getFiltered(){const v={PeriodType:periodType.value,Period:period.value,Tech:tech.value,Lead:lead.value,Location:document.getElementById("location").value,AgentType:agentType.value,Alias:agent.value};return rawData.filter(r=>(!v.PeriodType||r.PeriodType===v.PeriodType)&&(!v.Period||r.Period===v.Period)&&(!v.Tech||r.Tech===v.Tech)&&(!v.Lead||r.Lead===v.Lead)&&(!v.Location||r.Location===v.Location)&&(!v.AgentType||r.AgentType===v.AgentType)&&(!v.Alias||r.Alias===v.Alias));}
 function layout(extra={}){return{margin:{l:62,r:36,t:20,b:70},paper_bgcolor:"#fff",plot_bgcolor:"#fff",font:{family:"Inter, Segoe UI, Arial",color:"#111827"},legend:{orientation:"h",yanchor:"top",y:-.18,x:0},xaxis:{automargin:true},yaxis:{automargin:true},...extra};}
 
 function renderSummary(d){
  const c=comparisonContext(),cur=c.currentData,prev=c.previousData;
- if(!cur.length){summary.innerHTML='<span class="summary-title">Executive Summary</span>No data is available for the selected comparison week.';return;}
+ if(!cur.length){summary.innerHTML='<span class="summary-title">Executive Summary</span>No data is available for the selected comparison period.';return;}
  const cs=weightedAvg(cur,"CSAT","Surveys"),pcs=weightedAvg(prev,"CSAT","Surveys"),aht=avg(cur,"AHT"),paht=avg(prev,"AHT"),sur=sum(cur,"Surveys"),psur=sum(prev,"Surveys"),wc=watchCount(cur),pwc=watchCount(prev);
  const locs=group(cur,"Location"),plocs=group(prev,"Location");
  const rows=Object.keys(locs).filter(x=>x!=="Unassigned").map(name=>({name,csat:weightedAvg(locs[name],"CSAT","Surveys"),prev:plocs[name]?weightedAvg(plocs[name],"CSAT","Surveys"):null,aht:avg(locs[name],"AHT"),prevAht:plocs[name]?avg(plocs[name],"AHT"):null})).sort((a,b)=>(b.csat??-1)-(a.csat??-1));
@@ -474,7 +476,7 @@ function renderSummary(d){
  if(daht!==null)(daht<=0?positives:risks).push(`AHT ${daht<=0?"improved":"increased"} by ${Math.abs(daht).toFixed(1)} minutes`);
  if(ds!==null)(ds>=0?positives:risks).push(`survey volume ${ds>=0?"increased":"decreased"} by ${Math.abs(ds).toFixed(0)}`);
  if(dw!==null)(dw<=0?positives:risks).push(`watchlist ${dw<=0?"reduced":"increased"} by ${Math.abs(dw).toFixed(0)} agents`);
- summary.innerHTML=`<span class="summary-title">Executive Summary · ${c.current}${c.previous?` vs ${c.previous}`:""}</span>
+ summary.innerHTML=`<span class="summary-title">Executive Summary · ${periodLabel(c.current)}${c.previous?` vs ${periodLabel(c.previous)}`:""}</span>
  Overall CSAT is <strong>${fmt(cs,"%")}</strong> ${deltaHtml(dcs," pts")}, while AHT is <strong>${fmt(aht,"m")}</strong> ${deltaHtml(daht,"m",true)}. ${teamText}
  <div class="compare-grid">
    <div class="compare-box"><strong>Positive movement</strong>${positives.length?positives.join("; "):"No material positive movement detected."}</div>
@@ -486,11 +488,11 @@ function renderKPIs(d){
  const locRows=Object.keys(locs).filter(x=>x!=="Unassigned").map(name=>({name,v:weightedAvg(locs[name],"CSAT","Surveys")})).sort((a,b)=>(b.v??-1)-(a.v??-1));
  const cs=weightedAvg(cur,"CSAT","Surveys"),pcs=weightedAvg(prev,"CSAT","Surveys"),aht=avg(cur,"AHT"),paht=avg(prev,"AHT"),sv=sum(cur,"Surveys"),psv=sum(prev,"Surveys"),wc=watchCount(cur);
  const items=[
- ["Avg CSAT",fmt(cs,"%"),`${deltaHtml(delta(cs,pcs)," pts")} vs last week`],
+ ["Avg CSAT",fmt(cs,"%"),`${deltaHtml(delta(cs,pcs)," pts")} vs previous period`],
  ["CSAT Change",delta(cs,pcs)===null?"—":`${delta(cs,pcs)>=0?"+":""}${delta(cs,pcs).toFixed(1)} pts`,"top-priority movement"],
- ["Avg AHT",fmt(aht,"m"),`${deltaHtml(delta(aht,paht),"m",true)} vs last week`],
+ ["Avg AHT",fmt(aht,"m"),`${deltaHtml(delta(aht,paht),"m",true)} vs previous period`],
  ["AHT Change",delta(aht,paht)===null?"—":`${delta(aht,paht)>=0?"+":""}${delta(aht,paht).toFixed(1)}m`,"lower is better"],
- ["Total Surveys",fmt(sv,""),`${deltaHtml(delta(sv,psv),"")} vs last week`],
+ ["Total Surveys",fmt(sv,""),`${deltaHtml(delta(sv,psv),"")} vs previous period`],
  ["Watchlist",wc,"agents meeting a threshold"],
  ["Top Team",locRows[0]?.name||"—",locRows[0]?fmt(locRows[0].v,"%"):""],
  ["Overall Score",fmt(avg(agents,"Score"),"%"),"weighted composite"]
@@ -500,14 +502,14 @@ function renderKPIs(d){
 function renderLeaderboard(d){const a=agentAggregates(d).filter(x=>x.Surveys>0).sort((x,y)=>y.Score-x.Score);const h=["Rank","Agent","Score","CSAT","AHT","FRT","ART","Online Hours","Acceptance","Surveys","Location","Tech"];leaderboard.innerHTML="<thead><tr>"+h.map(x=>`<th>${x}</th>`).join("")+"</tr></thead><tbody>"+a.map((x,i)=>`<tr><td>${i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}</td><td><strong>${x.Alias}</strong></td><td><strong>${x.Score.toFixed(1)}</strong><div class="scorebar"><div class="scorefill" style="width:${Math.max(0,Math.min(100,x.Score))}%"></div></div></td><td>${fmt(x.CSAT,"%")}</td><td>${fmt(x.AHT,"m")}</td><td>${fmt(x.FRT,"s")}</td><td>${fmt(x.ART,"s")}</td><td>${fmt(x.OnlineHours,"h")}</td><td>${fmt(x.Acceptance,"%")}</td><td>${x.Surveys}</td><td>${x.Location}</td><td>${x.Tech}</td></tr>`).join("")+"</tbody>";}
 
 function renderCharts(d){
- const c=comparisonContext(),base=c.base,bw=group(base,"Week"),weeks=c.weeks;
- Plotly.react("csatTrend",[{x:weeks,y:weeks.map(w=>weightedAvg(bw[w],"CSAT","Surveys")),name:"CSAT %",type:"scatter",mode:"lines+markers",line:{width:4},marker:{size:8}}],layout({showlegend:false,yaxis:{title:"CSAT %",range:[0,100],automargin:true}}),{responsive:true});
- Plotly.react("surveyTrend",[{x:weeks,y:weeks.map(w=>sum(bw[w],"Surveys")),name:"Surveys",type:"bar",text:weeks.map(w=>sum(bw[w],"Surveys")),textposition:"outside"}],layout({showlegend:false,yaxis:{title:"Survey Count",automargin:true}}),{responsive:true});
+ const c=comparisonContext(),base=c.base,bw=group(base,"Period"),periods=c.periods;
+ Plotly.react("csatTrend",[{x:periods.map(p=>periodLabel(p)),y:periods.map(p=>weightedAvg(bw[p],"CSAT","Surveys")),name:"CSAT %",type:"scatter",mode:"lines+markers",line:{width:4},marker:{size:8}}],layout({showlegend:false,yaxis:{title:"CSAT %",range:[0,100],automargin:true}}),{responsive:true});
+ Plotly.react("surveyTrend",[{x:periods.map(p=>periodLabel(p)),y:periods.map(p=>sum(bw[p],"Surveys")),name:"Surveys",type:"bar",text:periods.map(p=>sum(bw[p],"Surveys")),textposition:"outside"}],layout({showlegend:false,yaxis:{title:"Survey Count",automargin:true}}),{responsive:true});
 
  const cur=c.currentData,prev=c.previousData,cl=group(cur,"Location"),pl=group(prev,"Location"),locs=Object.keys(cl).filter(x=>x!=="Unassigned").sort();
  Plotly.react("teamChart",[
-   {x:locs,y:locs.map(k=>weightedAvg(cl[k],"CSAT","Surveys")),type:"bar",name:c.current||"Current"},
-   {x:locs,y:locs.map(k=>pl[k]?weightedAvg(pl[k],"CSAT","Surveys"):null),type:"bar",name:c.previous||"Previous"}
+   {x:locs,y:locs.map(k=>weightedAvg(cl[k],"CSAT","Surveys")),type:"bar",name:periodLabel(c.current)||"Current"},
+   {x:locs,y:locs.map(k=>pl[k]?weightedAvg(pl[k],"CSAT","Surveys"):null),type:"bar",name:periodLabel(c.previous)||"Previous"}
  ],layout({barmode:"group",yaxis:{title:"CSAT %",range:[0,100],automargin:true}}),{responsive:true});
 
  const bt=group(cur,"Tech"),techs=Object.keys(bt).filter(x=>x!=="Unassigned").sort();
@@ -522,7 +524,7 @@ function renderCharts(d){
  watchlist.style.height=Math.max(410,watch.length*34+120)+"px";
  Plotly.react("watchlist",[{x:watch.map(a=>a.CSAT),y:watch.map(a=>a.Alias),type:"bar",orientation:"h",text:watch.map(a=>`CSAT ${fmt(a.CSAT,"%")} · AHT ${fmt(a.AHT,"m")}`),textposition:"inside",insidetextanchor:"end"}],layout({margin:{l:150,r:30,t:20,b:65},xaxis:{title:"CSAT %",range:[0,100],automargin:true},yaxis:{automargin:true},showlegend:false}),{responsive:true});
 }
-function renderDetail(d){const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];detailTable.innerHTML="<thead><tr>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead><tbody>"+d.slice(0,1500).map(r=>"<tr>"+cols.map(c=>{const v=r[c]??"",cls=c==="CSAT"&&v!==""?(v<80?"bad":v>=90?"good":""):"";return `<td class="${cls}">${v}</td>`;}).join("")+"</tr>").join("")+"</tbody>";rowCount.textContent=d.length.toLocaleString()+" rows";}
+function renderDetail(d){const cols=["PeriodType","Period","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];detailTable.innerHTML="<thead><tr>"+cols.map(c=>`<th>${c}</th>`).join("")+"</tr></thead><tbody>"+d.slice(0,1500).map(r=>"<tr>"+cols.map(c=>{const v=r[c]??"",cls=c==="CSAT"&&v!==""?(v<80?"bad":v>=90?"good":""):"";return `<td class="${cls}">${v}</td>`;}).join("")+"</tr>").join("")+"</tbody>";rowCount.textContent=d.length.toLocaleString()+" rows";}
 function animateRefresh(){
   const targets=[document.getElementById("summary"),document.getElementById("kpis"),
     ...document.querySelectorAll("main .card")].filter(Boolean);
@@ -538,8 +540,8 @@ function update(){try{
 function resetFilters(){
 
 
-["week","tech","lead","location","agentType","agent"].forEach(id=>document.getElementById(id).value="");update();}
-function exportCSV(){const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];const csv=[cols.join(",")].concat(currentData.map(r=>cols.map(c=>`"${String(r[c]??"").replace(/"/g,'""')}"`).join(","))).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="filtered_dashboard_data.csv";a.click();}
+periodType.value="Weekly";["tech","lead","location","agentType","agent"].forEach(id=>document.getElementById(id).value="");populatePeriods(false);update();}
+function exportCSV(){const cols=["PeriodType","Period","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];const csv=[cols.join(",")].concat(currentData.map(r=>cols.map(c=>`"${String(r[c]??"").replace(/"/g,'""')}"`).join(","))).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="filtered_dashboard_data.csv";a.click();}
 
 async function setLastUpdated(){
  const el=document.getElementById("lastUpdated");
@@ -557,7 +559,7 @@ async function setLastUpdated(){
  }
 }
 
-async function load(){try{const res=await fetch("data.csv?cacheBust="+Date.now());if(!res.ok)throw new Error("Could not find data.csv next to index.html.");rawData=clean(parseCSV(await res.text()));populateSelect("week","Week","Weeks");populateSelect("tech","Tech","Tech");populateSelect("lead","Lead","Leads");populateSelect("location","Location","Locations");populateSelect("agentType","AgentType","Agent Types");populateSelect("agent","Alias","Agents");await setLastUpdated();update();}catch(e){status.innerHTML='<span class="error">Error loading data.csv:</span> '+e.message;}}
+async function load(){try{const res=await fetch("data.csv?cacheBust="+Date.now());if(!res.ok)throw new Error("Could not find data.csv next to index.html.");rawData=clean(parseCSV(await res.text()));const types=[...new Set(rawData.map(r=>r.PeriodType).filter(Boolean))];periodType.innerHTML=types.map(v=>`<option value="${v}">${v}</option>`).join("");periodType.value=types.includes("Weekly")?"Weekly":types[0]||"";populatePeriods(false);populateSelect("tech","Tech","Tech");populateSelect("lead","Lead","Leads");populateSelect("location","Location","Locations");populateSelect("agentType","AgentType","Agent Types");populateSelect("agent","Alias","Agents");await setLastUpdated();update();}catch(e){status.innerHTML='<span class="error">Error loading data.csv:</span> '+e.message;}}
 const themeSelect=document.getElementById("themeSelect");
 const darkModeToggle=document.getElementById("darkModeToggle");
 
@@ -606,7 +608,8 @@ themeResetBtn.addEventListener("click",()=>{
 });
 loadAppearance();
 
-["week","tech","lead","location","agentType","agent"].forEach(id=>document.getElementById(id).addEventListener("change",update));resetBtn.addEventListener("click",resetFilters);exportBtn.addEventListener("click",exportCSV);load();
+periodType.addEventListener("change",()=>{populatePeriods(false);update();});
+["period","tech","lead","location","agentType","agent"].forEach(id=>document.getElementById(id).addEventListener("change",update));resetBtn.addEventListener("click",resetFilters);exportBtn.addEventListener("click",exportCSV);load();
 </script>
 </body>
 </html>
