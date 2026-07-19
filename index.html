@@ -90,6 +90,65 @@ html[data-theme="white"]{
 }
 .summary{background:var(--summary-bg);border-color:var(--summary-line);border-left-color:var(--blue)}
 
+
+html[data-theme="red"]{
+  --header:#fff1f2;--header2:#ffe4e6;--header-accent:#ef4444;
+  --blue:#dc2626;--panel-soft:#fffafa;--line:#f3d0d4;
+  --summary-bg:#fff7f7;--summary-line:#f0bfc5
+}
+html[data-theme="orange"]{
+  --header:#fff7ed;--header2:#ffedd5;--header-accent:#f97316;
+  --blue:#ea580c;--panel-soft:#fffaf5;--line:#f2d7bf;
+  --summary-bg:#fff8f1;--summary-line:#f1c8a7
+}
+html[data-theme="green"]{
+  --header:#f0fdf4;--header2:#dcfce7;--header-accent:#22c55e;
+  --blue:#16a34a;--panel-soft:#f7fcf8;--line:#cfe8d6;
+  --summary-bg:#f3fbf5;--summary-line:#bfe1c8
+}
+html[data-theme="purple"]{
+  --header:#faf5ff;--header2:#f3e8ff;--header-accent:#a855f7;
+  --blue:#7e22ce;--panel-soft:#fbf8ff;--line:#dfd0ec;
+  --summary-bg:#faf6ff;--summary-line:#d5bfeb
+}
+html[data-theme="pink"]{
+  --header:#fdf2f8;--header2:#fce7f3;--header-accent:#ec4899;
+  --blue:#db2777;--panel-soft:#fff8fc;--line:#efd0df;
+  --summary-bg:#fff6fb;--summary-line:#eabfd4
+}
+
+
+
+/* ===== Theme-specific dark variants; controlled only by the Dark toggle ===== */
+html.dark[data-theme="gold"]{
+  --header:#2d2613;--header2:#4a3b14;--header-accent:#facc15;
+  --blue:#eab308;--summary-bg:#2b2515;--summary-line:#6b571b
+}
+html.dark[data-theme="blue"]{
+  --header:#0f1f35;--header2:#163b6d;--header-accent:#60a5fa;
+  --blue:#3b82f6;--summary-bg:#111d31;--summary-line:#304864
+}
+html.dark[data-theme="red"]{
+  --header:#321417;--header2:#5b1f26;--header-accent:#f87171;
+  --blue:#ef4444;--summary-bg:#2f171a;--summary-line:#6b2a31
+}
+html.dark[data-theme="orange"]{
+  --header:#321d0d;--header2:#5a2f0f;--header-accent:#fb923c;
+  --blue:#f97316;--summary-bg:#2f1e12;--summary-line:#6b3a16
+}
+html.dark[data-theme="green"]{
+  --header:#0d2919;--header2:#14532d;--header-accent:#4ade80;
+  --blue:#22c55e;--summary-bg:#10271a;--summary-line:#28643b
+}
+html.dark[data-theme="purple"]{
+  --header:#24123d;--header2:#4c1d95;--header-accent:#c084fc;
+  --blue:#a855f7;--summary-bg:#25153b;--summary-line:#5b2d89
+}
+html.dark[data-theme="pink"]{
+  --header:#321426;--header2:#6b1d48;--header-accent:#f472b6;
+  --blue:#ec4899;--summary-bg:#2f1726;--summary-line:#6b2a52
+}
+
 /* Dark mode */
 html.dark{
   --bg:#0f172a;--panel:#111827;--panel-soft:#162033;--text:#f8fafc;--muted:#a7b3c5;
@@ -239,6 +298,44 @@ html.dark footer{border-color:var(--line);color:#cbd5e1}
   .theme-select{width:100%;min-width:0}
 }
 
+
+/* ===== Dark mode readability fixes ===== */
+html.dark .compare-box{
+  background:#162033;
+  color:#f8fafc;
+  border-color:#304864;
+}
+html.dark .compare-box strong{
+  color:#f8fafc;
+}
+html.dark .mover-head{
+  background:#162033;
+  color:#f8fafc;
+}
+
+/* Keep conditional CSAT colours visible in dark mode */
+html.dark td.good,
+html.dark .good{
+  color:#22c55e !important;
+  font-weight:900;
+}
+html.dark td.bad,
+html.dark .bad{
+  color:#f87171 !important;
+  font-weight:900;
+}
+
+/* Keep positive/negative movement indicators visible */
+html.dark .delta-up{
+  color:#22c55e !important;
+}
+html.dark .delta-down{
+  color:#f87171 !important;
+}
+html.dark .delta-flat{
+  color:#a7b3c5 !important;
+}
+
 </style>
 </head>
 <body>
@@ -248,9 +345,12 @@ html.dark footer{border-color:var(--line);color:#cbd5e1}
   <label for="themeSelect">Theme</label>
   <select id="themeSelect" class="theme-select" aria-label="Dashboard theme">
     <option value="gold">Gold</option>
-    <option value="blue">Blue</option>
-    <option value="navy">Navy</option>
-    <option value="white">White</option>
+      <option value="blue">Blue</option>
+      <option value="red">Red</option>
+      <option value="orange">Orange</option>
+      <option value="green">Green</option>
+      <option value="purple">Purple</option>
+      <option value="pink">Pink</option>
   </select>
 </div>
 <label class="dark-toggle" for="darkModeToggle" title="Switch dark mode on or off" aria-label="Dark mode toggle">
@@ -435,18 +535,22 @@ function refreshPlotThemes(){
   });
 }
 function applyAppearance(theme,dark,save=true){
-  document.documentElement.dataset.theme=theme||"gold";
-  document.documentElement.classList.toggle("dark",Boolean(dark));
-  themeSelect.value=theme||"gold";
-  darkModeToggle.checked=Boolean(dark);
+  const selectedTheme=theme||"gold";
+  const selectedDark=Boolean(dark);
+  document.documentElement.dataset.theme=selectedTheme;
+  document.documentElement.classList.toggle("dark",selectedDark);
+  themeSelect.value=selectedTheme;
+  darkModeToggle.checked=selectedDark;
   if(save){
-    localStorage.setItem("supportDashboardTheme",theme||"gold");
-    localStorage.setItem("supportDashboardDark",dark?"1":"0");
+    localStorage.setItem("supportDashboardTheme",selectedTheme);
+    localStorage.setItem("supportDashboardDark",selectedDark?"1":"0");
   }
   requestAnimationFrame(()=>{refreshPlotThemes();animateRefresh();});
 }
 function loadAppearance(){
-  const savedTheme=localStorage.getItem("supportDashboardTheme")||"gold";
+  const validThemes=["gold","blue","red","orange","green","purple","pink"];
+  const storedTheme=localStorage.getItem("supportDashboardTheme");
+  const savedTheme=validThemes.includes(storedTheme)?storedTheme:"gold";
   const savedDark=localStorage.getItem("supportDashboardDark")==="1";
   applyAppearance(savedTheme,savedDark,false);
 }
