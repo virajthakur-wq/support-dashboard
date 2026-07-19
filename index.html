@@ -336,6 +336,35 @@ html.dark .delta-flat{
   color:#a7b3c5 !important;
 }
 
+
+/* ===== Reset theme control ===== */
+.theme-reset-btn{
+  width:34px;
+  height:34px;
+  padding:0;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--control-bg);
+  color:var(--text);
+  font-size:16px;
+  font-weight:900;
+  cursor:pointer;
+  line-height:1;
+  box-shadow:0 4px 12px rgba(15,23,42,.08);
+  transition:background-color .28s ease,color .28s ease,border-color .28s ease;
+}
+.theme-reset-btn:hover{
+  background:var(--control-bg);
+  border-color:var(--line);
+}
+.theme-reset-btn:focus-visible{
+  outline:3px solid var(--focus-ring);
+  outline-offset:2px;
+}
+@media(max-width:820px){
+  .theme-reset-btn{width:100%}
+}
+
 </style>
 </head>
 <body>
@@ -345,7 +374,7 @@ html.dark .delta-flat{
   <label for="themeSelect">Theme</label>
   <select id="themeSelect" class="theme-select" aria-label="Dashboard theme">
     <option value="gold">Gold</option>
-      <option value="blue">Blue</option>
+      <option value="blue">Blue ★ Default</option>
       <option value="red">Red</option>
       <option value="orange">Orange</option>
       <option value="green">Green</option>
@@ -353,6 +382,7 @@ html.dark .delta-flat{
       <option value="pink">Pink</option>
   </select>
 </div>
+<button class="theme-reset-btn" id="themeResetBtn" type="button" title="Reset to Blue Light Mode" aria-label="Reset theme">↻</button>
 <label class="dark-toggle" for="darkModeToggle" title="Switch dark mode on or off" aria-label="Dark mode toggle">
   <span>Dark</span>
   <input id="darkModeToggle" type="checkbox" aria-label="Dark mode">
@@ -550,12 +580,18 @@ function applyAppearance(theme,dark,save=true){
 function loadAppearance(){
   const validThemes=["gold","blue","red","orange","green","purple","pink"];
   const storedTheme=localStorage.getItem("supportDashboardTheme");
-  const savedTheme=validThemes.includes(storedTheme)?storedTheme:"gold";
+  const savedTheme=validThemes.includes(storedTheme)?storedTheme:"blue";
   const savedDark=localStorage.getItem("supportDashboardDark")==="1";
   applyAppearance(savedTheme,savedDark,false);
 }
+const themeResetBtn=document.getElementById("themeResetBtn");
 themeSelect.addEventListener("change",()=>applyAppearance(themeSelect.value,darkModeToggle.checked));
 darkModeToggle.addEventListener("change",()=>applyAppearance(themeSelect.value,darkModeToggle.checked));
+themeResetBtn.addEventListener("click",()=>{
+  localStorage.removeItem("supportDashboardTheme");
+  localStorage.removeItem("supportDashboardDark");
+  applyAppearance("blue",false,false);
+});
 loadAppearance();
 
 ["week","tech","lead","location","agentType","agent"].forEach(id=>document.getElementById(id).addEventListener("change",update));resetBtn.addEventListener("click",resetFilters);exportBtn.addEventListener("click",exportCSV);load();
