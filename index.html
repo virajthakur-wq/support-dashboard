@@ -394,6 +394,28 @@ function update(){try{
   animateRefresh();
 }catch(e){console.error(e);status.classList.remove("loading");status.innerHTML='<span class="error">Dashboard error:</span> '+e.message;}}
 function resetFilters(){
+
+
+["week","tech","lead","location","agentType","agent"].forEach(id=>document.getElementById(id).value="");update();}
+function exportCSV(){const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];const csv=[cols.join(",")].concat(currentData.map(r=>cols.map(c=>`"${String(r[c]??"").replace(/"/g,'""')}"`).join(","))).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="filtered_dashboard_data.csv";a.click();}
+
+async function setLastUpdated(){
+ const el=document.getElementById("lastUpdated");
+ try{
+  const api="https://api.github.com/repos/virajthakur-wq/support-dashboard/commits?path=data.csv&sha=main&per_page=1";
+  const r=await fetch(api,{headers:{Accept:"application/vnd.github+json"}});
+  if(!r.ok)throw new Error("GitHub API "+r.status);
+  const commits=await r.json();
+  const stamp=commits?.[0]?.commit?.committer?.date||commits?.[0]?.commit?.author?.date;
+  if(!stamp)throw new Error("No data.csv commit found");
+  el.textContent=new Date(stamp).toLocaleString(undefined,{year:"numeric",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+ }catch(err){
+  console.warn("Could not load data.csv commit time",err);
+  el.textContent="Update time unavailable";
+ }
+}
+
+async function load(){try{const res=await fetch("data.csv?cacheBust="+Date.now());if(!res.ok)throw new Error("Could not find data.csv next to index.html.");rawData=clean(parseCSV(await res.text()));populateSelect("week","Week","Weeks");populateSelect("tech","Tech","Tech");populateSelect("lead","Lead","Leads");populateSelect("location","Location","Locations");populateSelect("agentType","AgentType","Agent Types");populateSelect("agent","Alias","Agents");await setLastUpdated();update();}catch(e){status.innerHTML='<span class="error">Error loading data.csv:</span> '+e.message;}}
 const themeSelect=document.getElementById("themeSelect");
 const darkModeToggle=document.getElementById("darkModeToggle");
 
@@ -432,26 +454,6 @@ themeSelect.addEventListener("change",()=>applyAppearance(themeSelect.value,dark
 darkModeToggle.addEventListener("change",()=>applyAppearance(themeSelect.value,darkModeToggle.checked));
 loadAppearance();
 
-["week","tech","lead","location","agentType","agent"].forEach(id=>document.getElementById(id).value="");update();}
-function exportCSV(){const cols=["Week","Alias","Tech","Location","Lead","AgentType","CSAT","Surveys","AHT","FRT","ART","OnlineHours","OnlineDays","Acceptance"];const csv=[cols.join(",")].concat(currentData.map(r=>cols.map(c=>`"${String(r[c]??"").replace(/"/g,'""')}"`).join(","))).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="filtered_dashboard_data.csv";a.click();}
-
-async function setLastUpdated(){
- const el=document.getElementById("lastUpdated");
- try{
-  const api="https://api.github.com/repos/virajthakur-wq/support-dashboard/commits?path=data.csv&sha=main&per_page=1";
-  const r=await fetch(api,{headers:{Accept:"application/vnd.github+json"}});
-  if(!r.ok)throw new Error("GitHub API "+r.status);
-  const commits=await r.json();
-  const stamp=commits?.[0]?.commit?.committer?.date||commits?.[0]?.commit?.author?.date;
-  if(!stamp)throw new Error("No data.csv commit found");
-  el.textContent=new Date(stamp).toLocaleString(undefined,{year:"numeric",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
- }catch(err){
-  console.warn("Could not load data.csv commit time",err);
-  el.textContent="Update time unavailable";
- }
-}
-
-async function load(){try{const res=await fetch("data.csv?cacheBust="+Date.now());if(!res.ok)throw new Error("Could not find data.csv next to index.html.");rawData=clean(parseCSV(await res.text()));populateSelect("week","Week","Weeks");populateSelect("tech","Tech","Tech");populateSelect("lead","Lead","Leads");populateSelect("location","Location","Locations");populateSelect("agentType","AgentType","Agent Types");populateSelect("agent","Alias","Agents");await setLastUpdated();update();}catch(e){status.innerHTML='<span class="error">Error loading data.csv:</span> '+e.message;}}
 ["week","tech","lead","location","agentType","agent"].forEach(id=>document.getElementById(id).addEventListener("change",update));resetBtn.addEventListener("click",resetFilters);exportBtn.addEventListener("click",exportCSV);load();
 </script>
 </body>
